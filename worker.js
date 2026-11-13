@@ -584,7 +584,8 @@ export default {
       });
       const interaction = await readJson(upstream);
       return Response.json(translateResponse(interaction, payload.model), {
-        headers: { 'Cache-Control': 'no-store' }
+        headers: { 'Cache-Control': 'no-store' },
+        status: stringify(interaction).includes('Rate limit exceeded') ? 429 :200
       });
     } catch (error) {
         return new Response(String(error), { status: 500 });
