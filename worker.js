@@ -1,4 +1,6 @@
-import { env } from 'cloudflare:workers';
+import {
+  env
+} from 'cloudflare:workers';
 const instanceOf = (value, constructor) => {
   try {
     return value instanceof constructor;
@@ -228,138 +230,133 @@ function parseTruncatedJSON(text) {
   }
 }
 
-
-
-
 const Q = fn => {
-    try {
-      return fn();
-    } catch {}
-  };
+  try {
+    return fn();
+  } catch {}
+};
 
-  const encoder = new TextEncoder();
-  const encode = encoder.encode.bind(encoder);
+const encoder = new TextEncoder();
+const encode = encoder.encode.bind(encoder);
 
-  const safeStatusText = (value) =>
-    Q(() => {
-      const bytes = encode(String(value)).slice(0, 200);
-      const latin1 = String.fromCharCode(...bytes);
-      const flat = JSON.stringify(latin1.replaceAll(/\s+/g, " "));
-      return flat.replaceAll(String.fromCharCode(127), "DEL");
-    }) ?? "";
+const safeStatusText = (value) =>
+  Q(() => {
+    const bytes = encode(String(value)).slice(0, 200);
+    const latin1 = String.fromCharCode(...bytes);
+    const flat = JSON.stringify(latin1.replaceAll(/\s+/g, " "));
+    return flat.replaceAll(String.fromCharCode(127), "DEL");
+  }) ?? "";
 
-  const isNullish = x => x === null || x === undefined;
+const isNullish = x => x === null || x === undefined;
 
-  async function bestEffortResponse(response) {
-    try {
-      const originalResponse = response;
-      if (!originalResponse.body) {
-        return originalResponse;
-      }
-      const originalReader = Q(() => originalResponse.body.getReader());
-      const resilientStream = new ReadableStream({
-        async pull(controller) {
-          try {
-            const {
-              done,
-              value
-            } = await originalReader.read();
-
-            if (done == true || (isNullish(done) && isNullish(value))) {
-              Q(() => controller.close());
-            } else {
-              controller.enqueue(value);
-            }
-          } catch (streamError) {
-            // A mid-stream network drop or timeout caught here!
-            console.warn(
-              "Stream interrupted prematurely. Closing stream gracefully with partial data.",
-              streamError,
-            );
-
-            Q(() => controller?.close?.()?.catch?.(() => {}));
-          }
-        },
-        cancel(reason) {
-          Q(() => originalReader?.cancel?.(reason)?.catch?.(() => {}));
-        },
-      });
-      return new Response(resilientStream, {
-        status: originalResponse.status,
-        statusText: originalResponse.statusText,
-        headers: originalResponse.headers,
-      });
-    } catch (e) {
-      return new Response(String(e), {
-        status: 500,
-        statusText: safeStatusText(e)
-      });
+async function bestEffortResponse(response) {
+  try {
+    const originalResponse = response;
+    if (!originalResponse.body) {
+      return originalResponse;
     }
-  }
-
-  async function bestEffortFetch(input, init) {
-    try {
-      const originalResponse = await fetch(input, init);
-      return await bestEffortResponse(originalResponse);
-    } catch (e) {
-      return new Response(String(e), {
-        status: 500,
-        statusText: safeStatusText(e)
-      });
-    }
-  }
-
-  async function $bytes(res) {
-    const chunks = [];
-    let reader;
-    try {
-      reader = res?.body?.getReader?.();
-      if (reader) {
-        while (true) {
+    const originalReader = Q(() => originalResponse.body.getReader());
+    const resilientStream = new ReadableStream({
+      async pull(controller) {
+        try {
           const {
             done,
             value
-          } = await reader.read();
+          } = await originalReader.read();
+
           if (done == true || (isNullish(done) && isNullish(value))) {
-            break;
+            Q(() => controller.close());
+          } else {
+            controller.enqueue(value);
           }
-          chunks.push(value);
+        } catch (streamError) {
+          // A mid-stream network drop or timeout caught here!
+          console.warn(
+            "Stream interrupted prematurely. Closing stream gracefully with partial data.",
+            streamError,
+          );
+
+          Q(() => controller?.close?.()?.catch?.(() => {}));
         }
-      }
-    } catch (e) {
-      return encode(String(e));
-    } finally {
-      Q(() => reader?.releaseLock?.()?.catch?.(() => {}));
-    }
-    return new Uint8Array(await new Blob(chunks).arrayBuffer());
+      },
+      cancel(reason) {
+        Q(() => originalReader?.cancel?.(reason)?.catch?.(() => {}));
+      },
+    });
+    return new Response(resilientStream, {
+      status: originalResponse.status,
+      statusText: originalResponse.statusText,
+      headers: originalResponse.headers,
+    });
+  } catch (e) {
+    return new Response(String(e), {
+      status: 500,
+      statusText: safeStatusText(e)
+    });
   }
+}
 
-  const decoder = new TextDecoder();
-  const decode = decoder.decode.bind(decoder);
-
-  async function $text(res) {
-    try {
-      if (!res.body) {
-        return res.statusText || '';
-      }
-      return decode(await $bytes(res));
-    } catch (e) {
-      return String(e);
-    }
+async function bestEffortFetch(input, init) {
+  try {
+    const originalResponse = await fetch(input, init);
+    return await bestEffortResponse(originalResponse);
+  } catch (e) {
+    return new Response(String(e), {
+      status: 500,
+      statusText: safeStatusText(e)
+    });
   }
+}
 
-  const fetchResponse = async (...args) => {
-    try {
-      return await bestEffortFetch(...args);
-    } catch (e) {
-      return new Response(String(e), {
-        status: 500,
-        statusText: safeStatusText(e)
-      });
+async function $bytes(res) {
+  const chunks = [];
+  let reader;
+  try {
+    reader = res?.body?.getReader?.();
+    if (reader) {
+      while (true) {
+        const {
+          done,
+          value
+        } = await reader.read();
+        if (done == true || (isNullish(done) && isNullish(value))) {
+          break;
+        }
+        chunks.push(value);
+      }
     }
-  };
+  } catch (e) {
+    return encode(String(e));
+  } finally {
+    Q(() => reader?.releaseLock?.()?.catch?.(() => {}));
+  }
+  return new Uint8Array(await new Blob(chunks).arrayBuffer());
+}
 
+const decoder = new TextDecoder();
+const decode = decoder.decode.bind(decoder);
 
+async function $text(res) {
+  try {
+    if (!res.body) {
+      return res.statusText || '';
+    }
+    return decode(await $bytes(res));
+  } catch (e) {
+    return String(e);
+  }
+}
+
+const fetchResponse = async (...args) => {
+  try {
+    return await bestEffortFetch(...args);
+  } catch (e) {
+    return new Response(String(e), {
+      status: 500,
+      statusText: safeStatusText(e)
+    });
+  }
+};
 
 const interactionsUrl = 'https://generativelanguage.googleapis.com/v1/interactions';
 const bodyLimit = 8 * 1024 * 1024;
@@ -372,39 +369,64 @@ const acceptedFields = new Set([
   'response_format', 'reasoning_effort', 'user', 'store'
 ]);
 
-
-
 async function readJson(message) {
-    const text = await $text(message);
-    return parseTruncatedJSON(text);
+  const text = await $text(message);
+  return parseTruncatedJSON(text);
 }
 
 function contentParts(content) {
   if (content == null) return [];
-  if (isString(content)) return [{ type: 'text', text: content }];
+  if (isString(content)) return [{
+    type: 'text',
+    text: content
+  }];
   return content.map((part) => {
-    if (part.type === 'text') return { type: 'text', text: part.text };
+    if (part.type === 'text') return {
+      type: 'text',
+      text: part.text
+    };
     if (part.type === 'image_url') {
-      const { url, detail } = part.image_url;
+      const {
+        url,
+        detail
+      } = part.image_url;
       if (detail != null && detail !== 'auto') {
-        (part?.image_url??{}).detail = 'auto';
+        (part?.image_url ?? {}).detail = 'auto';
       }
       const match = imageDataPattern.exec(url);
-      if (match) return { type: 'image', mime_type: match[1], data: match[2] };
-      return { type: 'image', uri: url };
+      if (match) return {
+        type: 'image',
+        mime_type: match[1],
+        data: match[2]
+      };
+      return {
+        type: 'image',
+        uri: url
+      };
     }
-    return [{ type: 'text', text: stringify(content) }];
+    return [{
+      type: 'text',
+      text: stringify(content)
+    }];
   });
 }
 
 function unpackToolId(id) {
-  if (!id.startsWith('gi_')) return { id, thoughts: [] };
-  const bytes = Uint8Array.fromBase64(id.slice(3), { alphabet: 'base64url' });
+  if (!id.startsWith('gi_')) return {
+    id,
+    thoughts: []
+  };
+  const bytes = Uint8Array.fromBase64(id.slice(3), {
+    alphabet: 'base64url'
+  });
   return parseTruncatedJSON(new TextDecoder().decode(bytes));
 }
 
 function packToolId(id, thoughts) {
-  const bytes = encoder.encode(JSON.stringify({ id, thoughts }));
+  const bytes = encoder.encode(JSON.stringify({
+    id,
+    thoughts
+  }));
   return `gi_${bytes.toBase64({ alphabet: 'base64url', omitPadding: true })}`;
 }
 
@@ -415,11 +437,12 @@ function translateRequest(body) {
   for (const message of body.messages) {
     if (message.role === 'tool' || message.role === 'function') {
       const suppliedId = message.tool_call_id == null ? undefined : unpackToolId(message.tool_call_id).id;
-      const index = pendingCalls.findIndex((call) => suppliedId != null
-        ? call.id === suppliedId : call.name === message.name);
+      const index = pendingCalls.findIndex((call) => suppliedId != null ?
+        call.id === suppliedId : call.name === message.name);
       const [call] = index < 0 ? [] : pendingCalls.splice(index, 1);
       input.push({
-        type: 'function_result', call_id: suppliedId ?? call?.id ?? message.name,
+        type: 'function_result',
+        call_id: suppliedId ?? call?.id ?? message.name,
         name: call?.name ?? message.name,
         result: message.content
       });
@@ -434,27 +457,46 @@ function translateRequest(body) {
       message.role = 'user';
     }
     // Prefer modern calls when a client supplies both representations.
-    const calls = message.tool_calls?.length ? message.tool_calls
-      : message.function_call ? [{ function: message.function_call }] : [];
+    const calls = message.tool_calls?.length ? message.tool_calls :
+      message.function_call ? [{
+        function: message.function_call
+      }] : [];
     let pendingContent = content;
     for (const call of calls) {
       const fn = call.function ?? call;
-      const { id, thoughts } = call.id == null
-        ? { id: `call_${crypto.randomUUID()}`, thoughts: [] } : unpackToolId(call.id);
+      const {
+        id,
+        thoughts
+      } = call.id == null ?
+        {
+          id: `call_${crypto.randomUUID()}`,
+          thoughts: []
+        } : unpackToolId(call.id);
       // A thinking model's turn must begin with its restored thought block.
       input.push(...thoughts);
       if (pendingContent.length) {
-        input.push({ type: 'model_output', content: pendingContent });
+        input.push({
+          type: 'model_output',
+          content: pendingContent
+        });
         pendingContent = [];
       }
       input.push({
-        type: 'function_call', id, name: fn.name,
+        type: 'function_call',
+        id,
+        name: fn.name,
         arguments: isString(fn.arguments) ? parseTruncatedJSON(fn.arguments) : fn.arguments ?? {}
       });
-      pendingCalls.push({ id, name: fn.name });
+      pendingCalls.push({
+        id,
+        name: fn.name
+      });
     }
     if (pendingContent.length) {
-      input.push({ type: message.role === 'user' ? 'user_input' : 'model_output', content: pendingContent });
+      input.push({
+        type: message.role === 'user' ? 'user_input' : 'model_output',
+        content: pendingContent
+      });
     }
   }
 
@@ -475,21 +517,39 @@ function translateRequest(body) {
   }
   const choice = body.tool_choice ?? body.function_call;
   if (choice != null) {
-    generation.tool_choice = isString(choice)
-      ? choice === 'required' ? 'any' : choice
-      : { allowed_tools: { mode: 'any', tools: [choice.function?.name ?? choice.name] } };
+    generation.tool_choice = isString(choice) ?
+      choice === 'required' ? 'any' : choice :
+      {
+        allowed_tools: {
+          mode: 'any',
+          tools: [choice.function?.name ?? choice.name]
+        }
+      };
   }
 
   const request = {
-    model: body.model, input, stream: false, background: false, store: false,
+    model: body.model,
+    input,
+    stream: false,
+    background: false,
+    store: false,
     generation_config: generation
   };
   if (instructions.length) request.system_instruction = instructions.join('\n\n');
   const tools = body.tools ?? body.functions;
   if (tools?.length) {
     request.tools = tools.map((tool) => {
-      const { name, description, parameters } = tool.function ?? tool;
-      return { type: 'function', name, description, parameters };
+      const {
+        name,
+        description,
+        parameters
+      } = tool.function ?? tool;
+      return {
+        type: 'function',
+        name,
+        description,
+        parameters
+      };
     });
   }
   const format = body.response_format;
@@ -502,8 +562,11 @@ function translateRequest(body) {
       format.json_schema.strict = false;
     }
     request.response_format = {
-      type: 'text', mime_type: 'application/json',
-      schema: format.type === 'json_schema' ? format.json_schema.schema : { type: 'object' }
+      type: 'text',
+      mime_type: 'application/json',
+      schema: format.type === 'json_schema' ? format.json_schema.schema : {
+        type: 'object'
+      }
     };
   }
   return request;
@@ -517,21 +580,25 @@ function translateResponse(interaction, model) {
     if (step.type === 'thought') {
       thoughts.push(step);
     } else if (step.type === 'model_output') {
-      if (step.error){
+      if (step.error) {
         text.push(stringify(step.error));
         continue;
       }
       for (const part of step.content ?? []) {
-        if (part.type !== 'text'){
-            text.push(stringify(part));
-        }else{
-            text.push(part.text);
+        if (part.type !== 'text') {
+          text.push(stringify(part));
+        } else {
+          text.push(part.text);
         }
       }
     } else if (step.type === 'function_call') {
       calls.push({
-        id: packToolId(step.id, thoughts), type: 'function',
-        function: { name: step.name, arguments: JSON.stringify(step.arguments) }
+        id: packToolId(step.id, thoughts),
+        type: 'function',
+        function: {
+          name: step.name,
+          arguments: JSON.stringify(step.arguments)
+        }
       });
       thoughts = [];
     } else {
@@ -539,14 +606,20 @@ function translateResponse(interaction, model) {
     }
   }
   // Without function calls, treat every upstream status as completed (finish_reason: 'stop').
-  const message = { role: 'assistant', content: text.length ? text.join(' ') : stringify(interaction) };
+  const message = {
+    role: 'assistant',
+    content: text.length ? text.join(' ') : stringify(interaction)
+  };
   if (calls.length) message.tool_calls = calls;
   const result = {
-    id: `chatcmpl-${interaction.id ?? crypto.randomUUID()}`, object: 'chat.completion',
+    id: `chatcmpl-${interaction.id ?? crypto.randomUUID()}`,
+    object: 'chat.completion',
     created: Math.floor(Date.parse(interaction.created ?? new Date().toISOString()) / 1000),
     model: interaction.model ?? model,
     choices: [{
-      index: 0, message, logprobs: null,
+      index: 0,
+      message,
+      logprobs: null,
       finish_reason: calls.length ? 'tool_calls' : 'stop'
     }]
   };
@@ -556,10 +629,15 @@ function translateResponse(interaction, model) {
     const reasoning = usage.total_thought_tokens ?? 0;
     const completion = (usage.total_output_tokens ?? 0) + reasoning;
     result.usage = {
-      prompt_tokens: prompt, completion_tokens: completion,
+      prompt_tokens: prompt,
+      completion_tokens: completion,
       total_tokens: usage.total_tokens ?? prompt + completion,
-      prompt_tokens_details: { cached_tokens: usage.total_cached_tokens ?? 0 },
-      completion_tokens_details: { reasoning_tokens: reasoning }
+      prompt_tokens_details: {
+        cached_tokens: usage.total_cached_tokens ?? 0
+      },
+      completion_tokens_details: {
+        reasoning_tokens: reasoning
+      }
     };
   }
   return result;
@@ -568,27 +646,33 @@ function translateResponse(interaction, model) {
 export default {
   async fetch(request) {
 
-
     const payload = translateRequest(await readJson(request));
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const upstream = await fetchResponse(interactionsUrl, {
-        method: 'POST', redirect: 'manual', signal: controller.signal,
+        method: 'POST',
+        redirect: 'manual',
+        signal: controller.signal,
         headers: {
-          'Content-Type': 'application/json', Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
           'x-goog-api-key': String(request.headers.get('authorization')).replace(/Bearer\s+/i, '')
         },
         body: JSON.stringify(payload)
       });
       const interaction = await readJson(upstream);
       return Response.json(translateResponse(interaction, payload.model), {
-        headers: { 'Cache-Control': 'no-store' },
-        status: stringify(interaction).includes('Rate limit exceeded') ? 429 :200
+        headers: {
+          'Cache-Control': 'no-store'
+        },
+        status: stringify(interaction).includes('Rate limit exceeded') ? 429 : 200
       });
     } catch (error) {
-        return new Response(String(error), { status: 500 });
+      return new Response(String(error), {
+        status: 500
+      });
     } finally {
       clearTimeout(timer);
     }
