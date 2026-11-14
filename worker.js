@@ -20,6 +20,8 @@ const isArray = (value) => {
   }
 }
 
+const isObject = value => typeof value === 'object' && value !== null;
+
 const stringify = (value) => {
   try {
     if (isString(value)) return String(value);
@@ -380,16 +382,25 @@ function contentParts(content) {
     type: 'text',
     text: content
   }];
-  return content.map((part) => {
-    if (part.type === 'text') return {
+  if(!isObject(content){
+    return [{
       type: 'text',
-      text: part.text
+      text: stringify(content)
+    }];
+  }
+  if(isObject(content) && !isArray(content)){
+    content = [content];
+  }
+  return content.map((part) => {
+    if (part?.type === 'text') return {
+      type: 'text',
+      text: stringify(part?.text)
     };
-    if (part.type === 'image_url') {
+    if (part?.type === 'image_url') {
       const {
         url,
         detail
-      } = part.image_url;
+      } = part?.image_url;
       if (detail != null && detail !== 'auto') {
         (part?.image_url ?? {}).detail = 'auto';
       }
