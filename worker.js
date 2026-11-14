@@ -410,15 +410,29 @@ function contentParts(content) {
     }];
   });
 }
+const base64ToBytes = x =>{
+  if(instanceOf(c,Uint8Array)){
+    return x;
+  }
+  try{
+    return Uint8Array.fromBase64(x, {
+      alphabet: 'base64url'
+    });
+  }catch{
+    try{
+      return Uint8Array.fromBase64(x);
+    }catch{
+      return new TextEncoder().encode(stringify(x));
+    }
+  }
+};
 
 function unpackToolId(id) {
   if (!id.startsWith('gi_')) return {
     id,
     thoughts: []
   };
-  const bytes = Uint8Array.fromBase64(id.slice(3), {
-    alphabet: 'base64url'
-  });
+  const bytes = base64ToBytes(id?.slice?.(3) ?? id);
   return parseTruncatedJSON(new TextDecoder().decode(bytes));
 }
 
@@ -434,7 +448,7 @@ function translateRequest(body) {
   const input = [];
   const instructions = [];
   const pendingCalls = [];
-  for (const message of body.messages) {
+  for (const message of body?.messages ?? []) {
     if (message.role === 'tool' || message.role === 'function') {
       const suppliedId = message.tool_call_id == null ? undefined : unpackToolId(message.tool_call_id).id;
       const index = pendingCalls.findIndex((call) => suppliedId != null ?
