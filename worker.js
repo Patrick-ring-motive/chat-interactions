@@ -439,11 +439,11 @@ const base64ToBytes = x =>{
 };
 
 function unpackToolId(id) {
-  if (!id.startsWith('gi_')) return {
+  if (!id?.startsWith?.('gi_')) return {
     id,
     thoughts: []
   };
-  const bytes = base64ToBytes(id?.slice?.(3) ?? id);
+  const bytes = base64ToBytes(id?.slice?.(3) ?? stringify(id));
   return parseTruncatedJSON(new TextDecoder().decode(bytes));
 }
 
