@@ -406,7 +406,7 @@ function contentParts(content) {
     }
     return [{
       type: 'text',
-      text: stringify(content)
+      text: stringify(part)
     }];
   });
 }
