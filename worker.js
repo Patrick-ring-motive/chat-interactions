@@ -411,7 +411,7 @@ function contentParts(content) {
   });
 }
 const base64ToBytes = x =>{
-  if(instanceOf(c,Uint8Array)){
+  if(instanceOf(x,Uint8Array)){
     return x;
   }
   try{
