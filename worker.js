@@ -615,7 +615,9 @@ function translateResponse(interaction, model) {
   const text = [];
   const calls = [];
   let thoughts = [];
-  for (const step of toArr(interaction.steps ?? interactions ?? [])) {
+  interaction = Object(interaction);
+  for (const step of toArr(interaction.steps ?? interaction)) {
+    step = Object(step);
     if (step.type === 'thought') {
       thoughts.push(step);
     } else if (step.type === 'model_output') {
@@ -623,11 +625,11 @@ function translateResponse(interaction, model) {
         text.push(stringify(step.error));
         continue;
       }
-      for (const part of toArr(step?.content ?? step ?? [])) {
-        if (part.type !== 'text') {
+      for (const part of toArr(step?.content ?? step)) {
+        if (part?.type !== 'text') {
           text.push(stringify(part));
         } else {
-          text.push(part.text);
+          text.push(stringify(part?.text));
         }
       }
     } else if (step.type === 'function_call') {
