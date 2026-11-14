@@ -404,10 +404,10 @@ function contentParts(content) {
         uri: url
       };
     }
-    return [{
+    return {
       type: 'text',
       text: stringify(part)
-    }];
+    };
   });
 }
 const base64ToBytes = x =>{
