@@ -467,7 +467,7 @@ function translateRequest(body) {
   const input = [];
   const instructions = [];
   const pendingCalls = [];
-  for (const message of toArr(body?.messages ?? body ?? [])) {
+  for (let message of toArr(body?.messages ?? body ?? [])) {
     message = Object(message);
     if (message.role === 'tool' || message.role === 'function') {
       const suppliedId = message.tool_call_id == null ? undefined : unpackToolId(message.tool_call_id)?.id;
@@ -613,7 +613,7 @@ function translateResponse(interaction, model) {
   const calls = [];
   let thoughts = [];
   interaction = Object(interaction);
-  for (const step of toArr(interaction.steps ?? interaction)) {
+  for (let step of toArr(interaction.steps ?? interaction)) {
     step = Object(step);
     if (step.type === 'thought') {
       thoughts.push(step);
@@ -683,11 +683,12 @@ function translateResponse(interaction, model) {
 
 export default {
   async fetch(request) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try{
     const payload = translateRequest(await readJson(request));
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
     
       const upstream = await fetchResponse(interactionsUrl, {
         method: 'POST',
