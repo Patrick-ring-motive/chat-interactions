@@ -373,14 +373,14 @@ async function readJson(message) {
   return parseTruncatedJSON(text);
 }
 
-const toArr = arr =>{
-  if(!isArray(arr)){
-      if(arr?.[Symbol.iterator]){
-        arr = [...arr].map(Object);
-      }else{
-        arr = [Object(arr)];
-      }
+const toArr = arr => {
+  if (!isArray(arr)) {
+    if (arr?.[Symbol.iterator]) {
+      arr = [...arr].map(Object);
+    } else {
+      arr = [Object(arr)];
     }
+  }
   return arr;
 };
 
@@ -390,7 +390,7 @@ function contentParts(content) {
     type: 'text',
     text: content
   }];
-  if(!isObject(content)){
+  if (!isObject(content)) {
     return [{
       type: 'text',
       text: stringify(content)
@@ -427,18 +427,18 @@ function contentParts(content) {
     };
   });
 }
-const base64ToBytes = x =>{
-  if(instanceOf(x,Uint8Array)){
+const base64ToBytes = x => {
+  if (instanceOf(x, Uint8Array)) {
     return x;
   }
-  try{
+  try {
     return Uint8Array.fromBase64(x, {
       alphabet: 'base64url'
     });
-  }catch{
-    try{
+  } catch {
+    try {
       return Uint8Array.fromBase64(x);
-    }catch{
+    } catch {
       return new TextEncoder().encode(stringify(x));
     }
   }
@@ -460,8 +460,6 @@ function packToolId(id, thoughts) {
   }));
   return `gi_${bytes.toBase64({ alphabet: 'base64url', omitPadding: true })}`;
 }
-
-
 
 function translateRequest(body) {
   const input = [];
@@ -501,11 +499,10 @@ function translateRequest(body) {
       let {
         id,
         thoughts
-      } = call?.id == null ?
-        {
-          id: `call_${crypto.randomUUID()}`,
-          thoughts: []
-        } : Object(unpackToolId(call?.id));
+      } = call?.id == null ? {
+        id: `call_${crypto.randomUUID()}`,
+        thoughts: []
+      } : Object(unpackToolId(call?.id));
       // A thinking model's turn must begin with its restored thought block.
       thoughts = toArr(thoughts ?? []);
       input.push(...thoughts);
@@ -554,8 +551,7 @@ function translateRequest(body) {
   const choice = body.tool_choice ?? body.function_call;
   if (choice != null) {
     generation.tool_choice = isString(choice) ?
-      choice === 'required' ? 'any' : choice :
-      {
+      choice === 'required' ? 'any' : choice : {
         allowed_tools: {
           mode: 'any',
           tools: [choice?.function?.name ?? choice?.name]
@@ -595,7 +591,7 @@ function translateRequest(body) {
       return request;
     }
     if (format?.json_schema?.strict) {
-      (format?.json_schema??{}).strict = false;
+      (format?.json_schema ?? {}).strict = false;
     }
     request.response_format = {
       type: 'text',
@@ -685,11 +681,9 @@ export default {
   async fetch(request) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try{
-    const payload = translateRequest(await readJson(request));
+    try {
+      const payload = translateRequest(await readJson(request));
 
-
-    
       const upstream = await fetchResponse(interactionsUrl, {
         method: 'POST',
         redirect: 'manual',
