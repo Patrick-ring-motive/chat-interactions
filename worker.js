@@ -376,21 +376,30 @@ async function readJson(message) {
   return parseTruncatedJSON(text);
 }
 
+const toArr = arr =>{
+  if(!isArray(arr)){
+      if(arr?.[Symbol.iterator]){
+        arr = [...arr].map(Object);
+      }else{
+        arr = [Object(arr)];
+      }
+    }
+  return arr;
+};
+
 function contentParts(content) {
   if (content == null) return [];
   if (isString(content)) return [{
     type: 'text',
     text: content
   }];
-  if(!isObject(content){
+  if(!isObject(content)){
     return [{
       type: 'text',
       text: stringify(content)
     }];
   }
-  if(isObject(content) && !isArray(content)){
-    content = [content];
-  }
+  content = toArr(content);
   return content.map((part) => {
     if (part?.type === 'text') return {
       type: 'text',
@@ -400,7 +409,7 @@ function contentParts(content) {
       const {
         url,
         detail
-      } = part?.image_url;
+      } = part?.image_url ?? {};
       if (detail != null && detail !== 'auto') {
         (part?.image_url ?? {}).detail = 'auto';
       }
@@ -455,47 +464,39 @@ function packToolId(id, thoughts) {
   return `gi_${bytes.toBase64({ alphabet: 'base64url', omitPadding: true })}`;
 }
 
-const toArr = arr =>{
-  if(!isArray(arr)){
-      if(arr?.[Symbol.iterator]){
-        arr = [...arr].map(Object);
-      }else{
-        arr = [Object(arr)];
-      }
-    }
-  return arr;
-};
+
 
 function translateRequest(body) {
   const input = [];
   const instructions = [];
   const pendingCalls = [];
-  for (const message of body?.messages ?? [Object(body?.messages ?? body)]) {
-    if (message?.role === 'tool' || message?.role === 'function') {
-      const suppliedId = message?.tool_call_id == null ? undefined : unpackToolId(message?.tool_call_id)?.id;
+  for (const message of toArr(body?.messages ?? body ?? [])) {
+    message = Object(message);
+    if (message.role === 'tool' || message.role === 'function') {
+      const suppliedId = message.tool_call_id == null ? undefined : unpackToolId(message.tool_call_id)?.id;
       const index = pendingCalls.findIndex((call) => suppliedId != null ?
-        call?.id === suppliedId : call?.name === message?.name);
+        call?.id === suppliedId : call?.name === message.name);
       const [call] = index < 0 ? [] : pendingCalls.splice(index, 1);
       input.push({
         type: 'function_result',
-        call_id: suppliedId ?? call?.id ?? message?.name ?? null,
-        name: call?.name ?? message?.name ?? null,
-        result: message?.content ?? null
+        call_id: suppliedId ?? call?.id ?? message.name ?? null,
+        name: call?.name ?? message.name ?? null,
+        result: message.content ?? null
       });
       continue;
     }
-    const content = toArr(contentParts(message?.content) ?? []);
-    if (message?.role === 'system' || message?.role === 'developer') {
+    const content = toArr(contentParts(message.content ?? message) ?? []);
+    if (message.role === 'system' || message.role === 'developer') {
       instructions.push(content.map((part) => part?.text ?? stringify(part)).join('\n'));
       continue;
     }
-    if (message?.role !== 'user' && message?.role !== 'assistant') {
-      (message??{}).role = 'user';
+    if (message.role !== 'user' && message.role !== 'assistant') {
+      message.role = 'user';
     }
     // Prefer modern calls when a client supplies both representations.
-    const calls = toArr(message?.tool_calls?.length ? message?.tool_calls :
-      message?.function_call ? [{
-        function: message?.function_call
+    const calls = toArr(message.tool_calls?.length ? message.tool_calls :
+      message.function_call ? [{
+        function: message.function_call
       }] : []);
     let pendingContent = content;
     for (const call of calls) {
@@ -507,9 +508,9 @@ function translateRequest(body) {
         {
           id: `call_${crypto.randomUUID()}`,
           thoughts: []
-        } : unpackToolId(call?.id);
+        } : Object(unpackToolId(call?.id));
       // A thinking model's turn must begin with its restored thought block.
-      thoughts toArr(thoughts ?? []);
+      thoughts = toArr(thoughts ?? []);
       input.push(...thoughts);
       if (pendingContent.length) {
         input.push({
@@ -574,14 +575,14 @@ function translateRequest(body) {
     generation_config: generation
   };
   if (instructions.length) request.system_instruction = instructions.join('\n\n');
-  const tools = body.tools ?? body.functions;
+  const tools = toArr(body.tools ?? body.functions ?? body);
   if (tools?.length) {
     request.tools = tools.map((tool) => {
       const {
         name,
         description,
         parameters
-      } = tool?.function ?? tool;
+      } = tool?.function ?? tool ?? {};
       return {
         type: 'function',
         name,
@@ -602,7 +603,7 @@ function translateRequest(body) {
     request.response_format = {
       type: 'text',
       mime_type: 'application/json',
-      schema: format?.type === 'json_schema' ? format?.json_schema.schema : {
+      schema: format?.type === 'json_schema' ? format?.json_schema?.schema : {
         type: 'object'
       }
     };
@@ -614,7 +615,7 @@ function translateResponse(interaction, model) {
   const text = [];
   const calls = [];
   let thoughts = [];
-  for (const step of interaction.steps ?? []) {
+  for (const step of toArr(interaction.steps ?? interactions ?? [])) {
     if (step.type === 'thought') {
       thoughts.push(step);
     } else if (step.type === 'model_output') {
@@ -622,7 +623,7 @@ function translateResponse(interaction, model) {
         text.push(stringify(step.error));
         continue;
       }
-      for (const part of step.content ?? []) {
+      for (const part of toArr(step?.content ?? step ?? [])) {
         if (part.type !== 'text') {
           text.push(stringify(part));
         } else {
@@ -646,11 +647,11 @@ function translateResponse(interaction, model) {
   // Without function calls, treat every upstream status as completed (finish_reason: 'stop').
   const message = {
     role: 'assistant',
-    content: text.length ? text.join(' ') : stringify(interaction)
+    content: text.length ? toArr(text).join(' ') : stringify(interaction)
   };
   if (calls.length) message.tool_calls = calls;
   const result = {
-    id: `chatcmpl-${interaction.id ?? crypto.randomUUID()}`,
+    id: `chatcmpl-${interaction?.id ?? crypto.randomUUID()}`,
     object: 'chat.completion',
     created: Math.floor(Date.parse(interaction.created ?? new Date().toISOString()) / 1000),
     model: interaction.model ?? model,
@@ -683,12 +684,12 @@ function translateResponse(interaction, model) {
 
 export default {
   async fetch(request) {
-
+    try{
     const payload = translateRequest(await readJson(request));
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
+    
       const upstream = await fetchResponse(interactionsUrl, {
         method: 'POST',
         redirect: 'manual',
