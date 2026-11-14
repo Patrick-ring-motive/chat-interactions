@@ -455,49 +455,61 @@ function packToolId(id, thoughts) {
   return `gi_${bytes.toBase64({ alphabet: 'base64url', omitPadding: true })}`;
 }
 
+const toArr = arr =>{
+  if(!isArray(arr)){
+      if(arr?.[Symbol.iterator]){
+        arr = [...arr].map(Object);
+      }else{
+        arr = [Object(arr)];
+      }
+    }
+  return arr;
+};
+
 function translateRequest(body) {
   const input = [];
   const instructions = [];
   const pendingCalls = [];
-  for (const message of body?.messages ?? []) {
-    if (message.role === 'tool' || message.role === 'function') {
-      const suppliedId = message.tool_call_id == null ? undefined : unpackToolId(message.tool_call_id).id;
+  for (const message of body?.messages ?? [Object(body?.messages ?? body)]) {
+    if (message?.role === 'tool' || message?.role === 'function') {
+      const suppliedId = message?.tool_call_id == null ? undefined : unpackToolId(message?.tool_call_id)?.id;
       const index = pendingCalls.findIndex((call) => suppliedId != null ?
-        call.id === suppliedId : call.name === message.name);
+        call?.id === suppliedId : call?.name === message?.name);
       const [call] = index < 0 ? [] : pendingCalls.splice(index, 1);
       input.push({
         type: 'function_result',
-        call_id: suppliedId ?? call?.id ?? message.name,
-        name: call?.name ?? message.name,
-        result: message.content
+        call_id: suppliedId ?? call?.id ?? message?.name ?? null,
+        name: call?.name ?? message?.name ?? null,
+        result: message?.content ?? null
       });
       continue;
     }
-    const content = contentParts(message.content);
-    if (message.role === 'system' || message.role === 'developer') {
+    const content = toArr(contentParts(message?.content) ?? []);
+    if (message?.role === 'system' || message?.role === 'developer') {
       instructions.push(content.map((part) => part?.text ?? stringify(part)).join('\n'));
       continue;
     }
-    if (message.role !== 'user' && message.role !== 'assistant') {
-      message.role = 'user';
+    if (message?.role !== 'user' && message?.role !== 'assistant') {
+      (message??{}).role = 'user';
     }
     // Prefer modern calls when a client supplies both representations.
-    const calls = message.tool_calls?.length ? message.tool_calls :
-      message.function_call ? [{
-        function: message.function_call
-      }] : [];
+    const calls = toArr(message?.tool_calls?.length ? message?.tool_calls :
+      message?.function_call ? [{
+        function: message?.function_call
+      }] : []);
     let pendingContent = content;
     for (const call of calls) {
-      const fn = call.function ?? call;
-      const {
+      const fn = call?.function ?? call;
+      let {
         id,
         thoughts
-      } = call.id == null ?
+      } = call?.id == null ?
         {
           id: `call_${crypto.randomUUID()}`,
           thoughts: []
-        } : unpackToolId(call.id);
+        } : unpackToolId(call?.id);
       // A thinking model's turn must begin with its restored thought block.
+      thoughts toArr(thoughts ?? []);
       input.push(...thoughts);
       if (pendingContent.length) {
         input.push({
@@ -509,30 +521,31 @@ function translateRequest(body) {
       input.push({
         type: 'function_call',
         id,
-        name: fn.name,
-        arguments: isString(fn.arguments) ? parseTruncatedJSON(fn.arguments) : fn.arguments ?? {}
+        name: fn?.name,
+        arguments: isString(fn?.arguments) ? parseTruncatedJSON(fn?.arguments) : fn?.arguments ?? {}
       });
       pendingCalls.push({
         id,
-        name: fn.name
+        name: fn?.name
       });
     }
     if (pendingContent.length) {
       input.push({
-        type: message.role === 'user' ? 'user_input' : 'model_output',
+        type: message?.role === 'user' ? 'user_input' : 'model_output',
         content: pendingContent
       });
     }
   }
 
   const generation = {};
+  body = Object(body);
   for (const key of ['temperature', 'top_p', 'seed']) {
     if (body[key] != null) generation[key] = body[key];
   }
   const maxTokens = body.max_completion_tokens ?? body.max_tokens;
   if (maxTokens != null) generation.max_output_tokens = maxTokens;
   if (body.stop != null) {
-    generation.stop_sequences = typeof body.stop === 'string' ? [body.stop] : body.stop;
+    generation.stop_sequences = isString(body.stop) ? [body.stop] : toArr(body.stop);
   }
   if (body.reasoning_effort != null) {
     if (!['minimal', 'low', 'medium', 'high'].includes(body.reasoning_effort)) {
@@ -547,7 +560,7 @@ function translateRequest(body) {
       {
         allowed_tools: {
           mode: 'any',
-          tools: [choice.function?.name ?? choice.name]
+          tools: [choice?.function?.name ?? choice?.name]
         }
       };
   }
@@ -568,7 +581,7 @@ function translateRequest(body) {
         name,
         description,
         parameters
-      } = tool.function ?? tool;
+      } = tool?.function ?? tool;
       return {
         type: 'function',
         name,
@@ -578,18 +591,18 @@ function translateRequest(body) {
     });
   }
   const format = body.response_format;
-  if (format && format.type !== 'text') {
+  if (format && format?.type !== 'text') {
     if (!['json_object', 'json_schema'].includes(format.type)) {
       format.type = 'text';
       return request;
     }
-    if (format.json_schema?.strict) {
-      format.json_schema.strict = false;
+    if (format?.json_schema?.strict) {
+      (format?.json_schema??{}).strict = false;
     }
     request.response_format = {
       type: 'text',
       mime_type: 'application/json',
-      schema: format.type === 'json_schema' ? format.json_schema.schema : {
+      schema: format?.type === 'json_schema' ? format?.json_schema.schema : {
         type: 'object'
       }
     };
