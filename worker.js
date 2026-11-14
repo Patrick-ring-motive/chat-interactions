@@ -1,6 +1,3 @@
-import {
-  env
-} from 'cloudflare:workers';
 const instanceOf = (value, constructor) => {
   try {
     return value instanceof constructor;
