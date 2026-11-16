@@ -600,7 +600,7 @@ function translateRequest(body) {
       } = tool?.function ?? tool ?? {};
       return {
         type: 'function',
-        name,
+        name: String(name),
         description,
         parameters
       };
