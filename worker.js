@@ -1,12 +1,12 @@
-const flattenRequest = req =>{
+const flattenRequest = req => {
   const obj = {};
-  for(const key in req){
-    if(typeof req[key] !== 'function'){
+  for (const key in req) {
+    if (typeof req[key] !== 'function') {
       obj[key] = req[key];
     }
   }
-  for(const key of Reflect.ownKeys(req)){
-    if(typeof req[key] !== 'function'){
+  for (const key of Reflect.ownKeys(req)) {
+    if (typeof req[key] !== 'function') {
       obj[String(key)] = req[key];
     }
   }
@@ -394,8 +394,8 @@ async function readJson(message) {
 
 const toArr = arr => {
   if (!isArray(arr)) {
-    if(isString(arr)){
-      return [Object.assign(Object(arr),parseTruncatedJSON(arr))];
+    if (isString(arr)) {
+      return [Object.assign(Object(arr), parseTruncatedJSON(arr))];
     }
     if (arr?.[Symbol.iterator]) {
       arr = [...arr].map(Object);
