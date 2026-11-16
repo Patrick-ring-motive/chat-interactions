@@ -7,7 +7,7 @@ const flattenRequest = req =>{
   }
   for(const key of Reflect.ownKeys(req)){
     if(typeof req[key] !== 'function'){
-      obj[key] = req[key];
+      obj[String(key)] = req[key];
     }
   }
   return {
