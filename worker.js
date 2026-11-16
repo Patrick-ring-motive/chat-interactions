@@ -703,7 +703,7 @@ export default {
         headers: {
           'Cache-Control': 'no-store'
         },
-        status: stringify(interaction).includes('Rate limit exceeded') ? 429 : 200
+        status: stringify(interaction).includes('Rate limit exceeded') ? 429 : interaction.status
       });
     } catch (error) {
       return new Response(String(error), {
