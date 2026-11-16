@@ -1,3 +1,22 @@
+const flattenRequest = req =>{
+  const obj = {};
+  for(const key in req){
+    if(typeof req[key] !== 'function'){
+      obj[key] = req[key];
+    }
+  }
+  for(const key of Reflect.ownKeys(req)){
+    if(typeof req[key] !== 'function'){
+      obj[key] = req[key];
+    }
+  }
+  return {
+    ...obj,
+    ...Object.fromEntries(req.headers.entries()),
+    ...Object.fromEntries(new URL(req.url).entries()),
+  };
+};
+
 const instanceOf = (value, constructor) => {
   try {
     return value instanceof constructor;
