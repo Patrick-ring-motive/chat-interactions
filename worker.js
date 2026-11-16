@@ -13,7 +13,7 @@ const flattenRequest = req =>{
   return {
     ...obj,
     ...Object.fromEntries(req.headers.entries()),
-    ...Object.fromEntries(new URL(req.url).entries()),
+    ...Object.fromEntries(new URL(req.url)searchParams.entries()),
   };
 };
 
