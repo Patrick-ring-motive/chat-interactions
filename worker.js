@@ -375,6 +375,9 @@ async function readJson(message) {
 
 const toArr = arr => {
   if (!isArray(arr)) {
+    if(isString(arr)){
+      return [Object.assign(Object(arr),parseTruncatedJSON(arr))];
+    }
     if (arr?.[Symbol.iterator]) {
       arr = [...arr].map(Object);
     } else {
@@ -568,7 +571,7 @@ function translateRequest(body) {
     generation_config: generation
   };
   if (instructions.length) request.system_instruction = instructions.join('\n\n');
-  const tools = toArr(body.tools ?? body.functions ?? body);
+  const tools = toArr(body.tools ?? body.functions ?? []);
   if (tools?.length) {
     request.tools = tools.map((tool) => {
       const {
