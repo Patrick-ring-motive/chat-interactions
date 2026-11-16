@@ -704,7 +704,7 @@ export default {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const payload = translateRequest(await readJson(request));
+      const payload = request.body ? translateRequest(await readJson(request)) : flattenRequest(request);
 
       const upstream = await fetchResponse(interactionsUrl, {
         method: 'POST',
