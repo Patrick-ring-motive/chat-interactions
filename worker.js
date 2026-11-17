@@ -41,9 +41,9 @@ const isArray = (value) => {
 const isObject = value => typeof value === 'object' && value !== null;
 
 const randId = () => {
-  try{
+  try {
     return crypto.randomUUID();
-  }catch {
+  } catch {
     return String(Math.random()).replace('0.', '');
   }
 };
@@ -53,7 +53,7 @@ const stringify = (value) => {
     if (isString(value)) return String(value);
     return String(JSON.stringify(value));
   } catch {
-    try{
+    try {
       return String(value);
     } catch {
       try {
@@ -453,8 +453,14 @@ function contentParts(content) {
         mime_type: match[1],
         data: match[2]
       };
-      return source ? { type: 'image', uri: source }
-        : { type: 'text', text: firstText(part?.text, part?.alt, part?.caption) ?? '[Image unavailable]' }; 
+      return source ? {
+          type: 'image',
+          uri: source
+        } :
+        {
+          type: 'text',
+          text: firstText(part?.text, part?.alt, part?.caption) ?? '[Image unavailable]'
+        };
     }
     return {
       type: 'text',
@@ -512,7 +518,9 @@ function firstText(...values) {
 function argumentObject(value) {
   const parsed = isString(value) ? parseTruncatedJSON(value) : value;
   if (parsed == null) return {};
-  return isObject(parsed) && !isArray(parsed) ? parsed : { value: parsed };
+  return isObject(parsed) && !isArray(parsed) ? parsed : {
+    value: parsed
+  };
 }
 
 function generatedName() {
@@ -526,11 +534,16 @@ function translateRequest(body) {
   const historyCalls = [];
   const tools = toArr(body?.tools ?? body?.functions ?? []).map((tool) => {
     const fn = tool?.function ?? tool ?? {};
-    return { ...fn, name: firstText(fn.name, fn.function_name, fn.title) };
+    return {
+      ...fn,
+      name: firstText(fn.name, fn.function_name, fn.title)
+    };
   });
   const declaredName = uniqueToolValue(tools.map((tool) => tool.name));
   const messages = body?.messages ?? body?.input ?? body?.prompt ?? body ?? [];
-  for (let message of toArr(isString(messages) ? [{ content: String(messages) }] : messages)) {
+  for (let message of toArr(isString(messages) ? [{
+      content: String(messages)
+    }] : messages)) {
     message = Object(message);
     if (message.role === 'tool' || message.role === 'function') {
       const suppliedId = uniqueToolValue([unpackToolId(firstText(message.tool_call_id, message.call_id, message.id))?.id]);
@@ -539,10 +552,10 @@ function translateRequest(body) {
         (suppliedId == null || call.id === suppliedId) &&
         (suppliedName == null || call.name == null || call.name === suppliedName));
       const call = candidates.length === 1 ? candidates[0] : undefined;
-      const matchingHistory = suppliedId == null ? candidates
-        : historyCalls.filter((item) => item.id === suppliedId);
-      const name = suppliedName ?? uniqueToolValue(matchingHistory.map((item) => item.name)) ?? declaredName
-        ?? (call ? generatedName() : undefined);
+      const matchingHistory = suppliedId == null ? candidates :
+        historyCalls.filter((item) => item.id === suppliedId);
+      const name = suppliedName ?? uniqueToolValue(matchingHistory.map((item) => item.name)) ?? declaredName ??
+        (call ? generatedName() : undefined);
       if (call) {
         pendingCalls.splice(pendingCalls.indexOf(call), 1);
         call.name ??= name;
@@ -550,10 +563,24 @@ function translateRequest(body) {
       const callId = suppliedId ?? call?.id;
       const result = message.content ?? message.result ?? message.output ?? '';
       if (callId && name) {
-        input.push({ type: 'function_result', call_id: callId, name, result: isString(result) || isObject(result) ? result : stringify(result) });
+        input.push({
+          type: 'function_result',
+          call_id: callId,
+          name,
+          result: isString(result) || isObject(result) ? result : stringify(result)
+        });
       } else {
         // Keep unlinked results as text instead of inventing a call they never answered.
-        input.push({ type: 'user_input', content: [{ type: 'text', text: stringify({ ...message, result }) }] });
+        input.push({
+          type: 'user_input',
+          content: [{
+            type: 'text',
+            text: stringify({
+              ...message,
+              result
+            })
+          }]
+        });
       }
       continue;
     }
@@ -637,7 +664,13 @@ function translateRequest(body) {
 
   const request = {
     model: firstText(body.model, body.model_id, body.model_name) ?? defaultModel,
-    input: input.length ? input : [{ type: 'user_input', content: [{ type: 'text', text: 'Continue.' }] }],
+    input: input.length ? input : [{
+      type: 'user_input',
+      content: [{
+        type: 'text',
+        text: 'Continue.'
+      }]
+    }],
     stream: false,
     background: false,
     store: false,
@@ -653,18 +686,23 @@ function translateRequest(body) {
       } = tool?.function ?? tool ?? {};
       return {
         type: 'function',
-        name: uniqueToolValue([name]) ?? (tools.length === 1
-          ? uniqueToolValue(historyCalls.map((call) => call.name)) : undefined) ?? generatedName(),
+        name: uniqueToolValue([name]) ?? (tools.length === 1 ?
+          uniqueToolValue(historyCalls.map((call) => call.name)) : undefined) ?? generatedName(),
         description,
         parameters
       };
     });
   }
   if (choice != null && !isString(choice)) {
-    const chosenName = firstText(choice?.function?.name, choice?.name)
-      ?? uniqueToolValue((request.tools ?? []).map((tool) => tool.name));
-    generation.tool_choice = chosenName
-      ? { allowed_tools: { mode: 'any', tools: [chosenName] } } : 'auto';
+    const chosenName = firstText(choice?.function?.name, choice?.name) ??
+      uniqueToolValue((request.tools ?? []).map((tool) => tool.name));
+    generation.tool_choice = chosenName ?
+      {
+        allowed_tools: {
+          mode: 'any',
+          tools: [chosenName]
+        }
+      } : 'auto';
   }
   const format = body.response_format;
   if (format && format?.type !== 'text') {
@@ -678,7 +716,9 @@ function translateRequest(body) {
     request.response_format = {
       type: 'text',
       mime_type: 'application/json',
-      schema: format?.json_schema?.schema ?? format?.schema ?? { type: 'object' }
+      schema: format?.json_schema?.schema ?? format?.schema ?? {
+        type: 'object'
+      }
     };
   }
   return request;
@@ -710,9 +750,9 @@ function translateResponse(interaction, model, tools = []) {
         id: packToolId(firstText(step.id, step.call_id) ?? `call_${randId()}`, thoughts),
         type: 'function',
         function: {
-          name: firstText(step.name, step.function_name, step.function?.name)
-            ?? uniqueToolValue(toArr(interaction.tools ?? tools).map((tool) => (tool?.function ?? tool)?.name))
-            ?? generatedName(),
+          name: firstText(step.name, step.function_name, step.function?.name) ??
+            uniqueToolValue(toArr(interaction.tools ?? tools).map((tool) => (tool?.function ?? tool)?.name)) ??
+            generatedName(),
           arguments: stringify(argumentObject(step.arguments ?? step.args ?? step.function?.arguments))
         }
       });
