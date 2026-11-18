@@ -608,7 +608,6 @@ function translateRequest(body) {
           result: isString(result) || isObject(result) ? result : stringify(result)
         });
       } else {
-        // Keep unlinked results as text instead of inventing a call they never answered.
         input.push({
           type: 'user_input',
           content: [{
@@ -622,29 +621,93 @@ function translateRequest(body) {
       }
       continue;
     }
-    const content = toArr(contentParts(message.content ?? message) ?? []);
-    if (/^(system|developer)$/.test(message.role)){
+
+    let content = toArr(contentParts(message.content ?? message) ?? []);
+    const restoredThoughts = [];
+
+    if (message.role === 'assistant') {
+      content = content.flatMap((part) => {
+        if (part?.type !== 'text' || !isString(part.text)) return [part];
+
+        const output = [];
+        const pattern = /\u001eTHOUGHT:([\s\S]*?)\u001f/g;
+        let offset = 0;
+        let match;
+
+        while ((match = pattern.exec(part.text))) {
+          if (match.index > offset) {
+            output.push({
+              ...part,
+              text: part.text.slice(offset, match.index)
+            });
+          }
+
+          const thought = parseTruncatedJSON(match[1]);
+          if (isObject(thought) && !isArray(thought)) {
+            const signature = firstText(thought.signature);
+            const summary = firstText(thought.text, thought.summary);
+
+            restoredThoughts.push({
+              type: 'thought',
+              ...(signature ? {
+                signature
+              } : {}),
+              ...(summary ? {
+                summary: [{
+                  type: 'text',
+                  text: summary
+                }]
+              } : {})
+            });
+          } else {
+            output.push({
+              ...part,
+              text: match[0]
+            });
+          }
+
+          offset = pattern.lastIndex;
+        }
+
+        if (offset < part.text.length || !output.length) {
+          output.push({
+            ...part,
+            text: part.text.slice(offset)
+          });
+        }
+
+        return output.filter((item) => item.text !== '');
+      });
+    }
+
+    if (/^(system|developer)$/.test(message.role)) {
       instructions.push(content.map((part) => part?.text ?? stringify(part)).join('\n'));
       continue;
     }
     if (!/^(user|assistant)$/.test(message.role)) {
       message.role = 'user';
     }
-    // Prefer modern calls when a client supplies both representations.
+
     const calls = toArr(message.tool_calls?.length ? message.tool_calls :
       message.function_call ? [{
         function: message.function_call
       }] : []);
     let pendingContent = content;
+
+    for (const thought of restoredThoughts) {
+      input.push(thought);
+    }
+
     for (const call of calls) {
       const fn = call?.function ?? call;
       let {
         id,
         thoughts
       } = toObj(unpackToolId(firstText(call?.id, call?.call_id, call?.tool_call_id)));
-      // A thinking model's turn must begin with its restored thought block.
+
       thoughts = toArr(thoughts ?? []);
       input.push(...thoughts);
+
       if (pendingContent.length) {
         input.push({
           type: 'model_output',
@@ -652,6 +715,7 @@ function translateRequest(body) {
         });
         pendingContent = [];
       }
+
       const historyName = uniqueToolValue(historyCalls.filter((item) => item.id === id).map((item) => item.name));
       const step = {
         type: 'function_call',
@@ -663,6 +727,7 @@ function translateRequest(body) {
       pendingCalls.push(step);
       historyCalls.push(step);
     }
+
     if (pendingContent.length) {
       input.push({
         type: message?.role === 'user' ? 'user_input' : 'model_output',
@@ -671,26 +736,34 @@ function translateRequest(body) {
     }
   }
 
-  for (const call of historyCalls){
+  for (const call of historyCalls) {
     call.name ??= generatedName();
   }
 
   const generation = {};
   body = toObj(body);
+
   for (const key of ['temperature', 'top_p', 'seed']) {
     if (body[key] != null) generation[key] = body[key];
   }
+
+  generation.thinking_summaries = body.reasoning_effort ?? 'auto';
+
   const maxTokens = body.max_completion_tokens ?? body.max_tokens;
   if (maxTokens != null) generation.max_output_tokens = maxTokens;
+
   if (body.stop != null) {
     generation.stop_sequences = isString(body.stop) ? [body.stop] : toArr(body.stop);
   }
+
   if (body.reasoning_effort != null) {
     if (!['minimal', 'low', 'medium', 'high'].includes(body.reasoning_effort)) {
       body.reasoning_effort = 'medium';
     }
     generation.thinking_level = body.reasoning_effort;
+    generation.thinking_summaries = body.reasoning_effort;
   }
+
   const choice = body.tool_choice ?? body.function_call;
   if (choice != null) {
     generation.tool_choice = isString(choice) ?
@@ -716,7 +789,9 @@ function translateRequest(body) {
     store: false,
     generation_config: generation
   };
+
   if (instructions.length) request.system_instruction = instructions.join('\n\n');
+
   if (tools?.length) {
     request.tools = tools.map((tool) => {
       const {
@@ -733,6 +808,7 @@ function translateRequest(body) {
       };
     });
   }
+
   if (choice != null && !isString(choice)) {
     const chosenName = firstText(choice?.function?.name, choice?.name) ??
       uniqueToolValue((request.tools ?? []).map((tool) => tool.name));
@@ -743,6 +819,7 @@ function translateRequest(body) {
       }
     } : 'auto';
   }
+
   const format = body.response_format;
   if (format && format?.type !== 'text') {
     if (!['json_object', 'json_schema'].includes(format.type)) {
@@ -758,6 +835,7 @@ function translateRequest(body) {
       }
     };
   }
+
   return request;
 }
 
