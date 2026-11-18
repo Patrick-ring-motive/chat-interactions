@@ -454,13 +454,12 @@ function contentParts(content) {
         data: match[2]
       };
       return source ? {
-          type: 'image',
-          uri: source
-        } :
-        {
-          type: 'text',
-          text: firstText(part?.text, part?.alt, part?.caption) ?? '[Image unavailable]'
-        };
+        type: 'image',
+        uri: source
+      } : {
+        type: 'text',
+        text: firstText(part?.text, part?.alt, part?.caption) ?? '[Image unavailable]'
+      };
     }
     return {
       type: 'text',
@@ -696,13 +695,12 @@ function translateRequest(body) {
   if (choice != null && !isString(choice)) {
     const chosenName = firstText(choice?.function?.name, choice?.name) ??
       uniqueToolValue((request.tools ?? []).map((tool) => tool.name));
-    generation.tool_choice = chosenName ?
-      {
-        allowed_tools: {
-          mode: 'any',
-          tools: [chosenName]
-        }
-      } : 'auto';
+    generation.tool_choice = chosenName ? {
+      allowed_tools: {
+        mode: 'any',
+        tools: [chosenName]
+      }
+    } : 'auto';
   }
   const format = body.response_format;
   if (format && format?.type !== 'text') {
