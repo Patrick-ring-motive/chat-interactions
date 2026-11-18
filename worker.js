@@ -502,8 +502,11 @@ const base64ToBytes = x => instanceOf(x, Uint8Array) ? x :
 
 
 function unpackToolId(id) {
-  const bytes = base64ToBytes(stringify(id));
-  return parseTruncatedJSON(new TextDecoder().decode(bytes).replace(/^gi_/,''));
+  const str = stringify(id).replace(/^gi_/,'');
+  const obj1 = parseTruncatedJSON(str):
+  const bytes = base64ToBytes(str);
+  const obj2 = parseTruncatedJSON(new TextDecoder().decode(bytes).replace(/^gi_/,''));
+  return {...obj1,...obj2};
 }
 
 function packToolId(id, thoughts) {
