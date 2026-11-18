@@ -1,6 +1,6 @@
 import * as util from 'node:util';
 
-const flattenRequest = req => {
+const flattenObject = req => {
   const obj = {};
   for (const key in req) {
     if (typeof req[key] !== 'function') {
@@ -12,11 +12,19 @@ const flattenRequest = req => {
       obj[String(key)] = req[key];
     }
   }
+  return obj;
+};
+
+const flattenRequest = req => {
   return {
-    ...obj,
+    ...flattenObject(req),
     ...Object.fromEntries(req.headers.entries()),
     ...Object.fromEntries(new URL(req.url).searchParams.entries()),
   };
+};
+
+const flattenArray = arr =>{
+  return Object.assign({},arr,...arr.map(flattenObject));
 };
 
 const instanceOf = (value, constructor) => {
