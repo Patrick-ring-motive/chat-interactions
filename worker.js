@@ -66,7 +66,7 @@ const stringify = (value) => {
       return String(value);
     } catch {
       try {
-        return util.inspect(value);
+        return String(util.inspect(value));
       } catch (e) {
         try {
           return String(e);
