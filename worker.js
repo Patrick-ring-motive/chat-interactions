@@ -358,7 +358,7 @@ async function $bytes(res) {
       }
     }
   } catch (e) {
-    return encode(String(e));
+    chunks.push(encode(String(e)));
   } finally {
     Q(() => reader?.releaseLock?.()?.catch?.(() => {}));
   }
