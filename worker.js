@@ -750,7 +750,7 @@ function translateRequest(body) {
     if (body[key] != null) generation[key] = body[key];
   }
 
-  generation.thinking_summaries = body.reasoning_effort ?? 'auto';
+  generation.thinking_summaries = 'auto';
 
   const maxTokens = body.max_completion_tokens ?? body.max_tokens;
   if (maxTokens != null) generation.max_output_tokens = maxTokens;
@@ -764,7 +764,6 @@ function translateRequest(body) {
       body.reasoning_effort = 'medium';
     }
     generation.thinking_level = body.reasoning_effort;
-    generation.thinking_summaries = body.reasoning_effort;
   }
 
   const choice = body.tool_choice ?? body.function_call;
