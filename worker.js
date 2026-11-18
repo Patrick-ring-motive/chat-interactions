@@ -501,12 +501,35 @@ const base64ToBytes = x => instanceOf(x, Uint8Array) ? x :
   concat(stringify(x).split(/([\w+/=-]{4,})/).map((s, i) => i % 2 ? tryB64(s) : encode(s)));
 
 
+const toThought = thought => {
+  thought = toObj(thought);
+  const summary = stringify(thought);
+  return {
+    type: 'thought',
+    ...thought,
+    ...(thought.summary ? {} : {
+      summary: [{
+        type: 'text',
+        text: summary
+      }]
+    })
+  };
+};
+
 function unpackToolId(id) {
-  const str = stringify(id).replace(/^gi_/,'');
-  const obj1 = parseTruncatedJSON(str):
+  const str = stringify(id).replace(/^gi_/, '');
+  const obj1 = parseTruncatedJSON(str);
   const bytes = base64ToBytes(str);
-  const obj2 = parseTruncatedJSON(new TextDecoder().decode(bytes).replace(/^gi_/,''));
-  return {...obj1,...obj2};
+  const obj2 = parseTruncatedJSON(new TextDecoder().decode(bytes).replace(/^gi_/, ''));
+  const parsed = {
+    ...toObj(obj1),
+    ...toObj(obj2)
+  };
+
+  return {
+    id: parsed?.id ?? str,
+    thoughts: toArr(parsed.thoughts ?? parsed).map(toThought)
+  }
 }
 
 function packToolId(id, thoughts) {
