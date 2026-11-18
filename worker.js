@@ -104,7 +104,7 @@ function parseTruncatedJSON(text) {
   }
 
   function readString() {
-    index++; // Opening quote.
+    index++;
     const chars = [];
     const escapes = {
       '"': '"',
@@ -414,6 +414,16 @@ async function readJson(message) {
   return parseTruncatedJSON(text);
 }
 
+const toObj = obj =>{
+  if(isString(obj)){
+    obj = Object.assign(Object(obj),parseTruncatedJSON(obj));
+  }
+  if(isArray(obj)){
+    return flattenArray(obj);
+  }
+  return Object(obj);
+}
+
 const toArr = arr => {
   if (!isArray(arr)) {
     if (isString(arr)) {
@@ -451,9 +461,7 @@ function contentParts(content) {
         url,
         detail
       } = part?.image_url ?? {};
-      if (detail != null && detail !== 'auto') {
-        (part?.image_url ?? {}).detail = 'auto';
-      }
+      (part?.image_url ?? {}).detail &&= 'auto';
       const source = firstText(url, part?.url, part?.uri, isString(part?.image_url) ? part.image_url : undefined);
       const match = imageDataPattern.exec(source);
       if (match) return {
@@ -519,7 +527,7 @@ const defaultModel = 'gemma-4-31b-it';
 
 function firstText(...values) {
   for (const value of values) {
-    if (value != null && stringify(value).trim()) return stringify(value);
+    if (stringify(value ?? '').trim()) return stringify(value);
   }
 }
 
@@ -550,9 +558,9 @@ function translateRequest(body) {
   const declaredName = uniqueToolValue(tools.map((tool) => tool.name));
   const messages = body?.messages ?? body?.input ?? body?.prompt ?? body ?? [];
   for (let message of toArr(isString(messages) ? [{
-      content: String(messages)
+      content: stringify(messages)
     }] : messages)) {
-    message = Object(message);
+    message = toObj(message);
     if (message.role === 'tool' || message.role === 'function') {
       const suppliedId = uniqueToolValue([unpackToolId(firstText(message.tool_call_id, message.call_id, message.id))?.id]);
       const suppliedName = firstText(message.name, message.function_name, message.function?.name);
@@ -593,11 +601,11 @@ function translateRequest(body) {
       continue;
     }
     const content = toArr(contentParts(message.content ?? message) ?? []);
-    if (message.role === 'system' || message.role === 'developer') {
+    if (/^(system|developer)$/.test(message.role)){
       instructions.push(content.map((part) => part?.text ?? stringify(part)).join('\n'));
       continue;
     }
-    if (message.role !== 'user' && message.role !== 'assistant') {
+    if (!/^(user|assisstant)$/.test(message.role)) {
       message.role = 'user';
     }
     // Prefer modern calls when a client supplies both representations.
@@ -611,7 +619,7 @@ function translateRequest(body) {
       let {
         id,
         thoughts
-      } = Object(unpackToolId(firstText(call?.id, call?.call_id, call?.tool_call_id)));
+      } = toObj(unpackToolId(firstText(call?.id, call?.call_id, call?.tool_call_id)));
       // A thinking model's turn must begin with its restored thought block.
       thoughts = toArr(thoughts ?? []);
       input.push(...thoughts);
@@ -641,10 +649,12 @@ function translateRequest(body) {
     }
   }
 
-  for (const call of historyCalls) call.name ??= generatedName();
+  for (const call of historyCalls){
+    call.name ??= generatedName();
+  }
 
   const generation = {};
-  body = Object(body);
+  body = toObj(body);
   for (const key of ['temperature', 'top_p', 'seed']) {
     if (body[key] != null) generation[key] = body[key];
   }
@@ -733,9 +743,9 @@ function translateResponse(interaction, model, tools = []) {
   const text = [];
   const calls = [];
   let thoughts = [];
-  interaction = Object(interaction);
+  interaction = toObj(interaction);
   for (let step of toArr(interaction.steps ?? interaction)) {
-    step = Object(step);
+    step = toObj(step);
     if (step.type === 'thought') {
       thoughts.push(step);
     } else if (step.type === 'model_output') {
@@ -744,11 +754,7 @@ function translateResponse(interaction, model, tools = []) {
         continue;
       }
       for (const part of toArr(step?.content ?? step)) {
-        if (part?.type !== 'text') {
-          text.push(stringify(part));
-        } else {
-          text.push(firstText(part?.text, part?.content, part?.value) ?? '');
-        }
+          text.push(firstText(part?.text, part?.content, part?.value) ?? stringify(part));
       }
     } else if (step.type === 'function_call') {
       calls.push({
@@ -758,7 +764,7 @@ function translateResponse(interaction, model, tools = []) {
           name: firstText(step.name, step.function_name, step.function?.name) ??
             uniqueToolValue(toArr(interaction.tools ?? tools).map((tool) => (tool?.function ?? tool)?.name)) ??
             generatedName(),
-          arguments: stringify(argumentObject(step.arguments ?? step.args ?? step.function?.arguments))
+          arguments: stringify(argumentObject(step.arguments ?? step.args ?? step.function?.arguments ?? step))
         }
       });
       thoughts = [];
