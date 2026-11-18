@@ -502,12 +502,8 @@ const base64ToBytes = x => instanceOf(x, Uint8Array) ? x :
 
 
 function unpackToolId(id) {
-  if (!id?.startsWith?.('gi_')) return {
-    id,
-    thoughts: []
-  };
-  const bytes = base64ToBytes(id?.slice?.(3) ?? stringify(id));
-  return parseTruncatedJSON(new TextDecoder().decode(bytes));
+  const bytes = base64ToBytes(stringify(id));
+  return parseTruncatedJSON(new TextDecoder().decode(bytes).replace(/^gi_/,''));
 }
 
 function packToolId(id, thoughts) {
@@ -605,7 +601,7 @@ function translateRequest(body) {
       instructions.push(content.map((part) => part?.text ?? stringify(part)).join('\n'));
       continue;
     }
-    if (!/^(user|assisstant)$/.test(message.role)) {
+    if (!/^(user|assistant)$/.test(message.role)) {
       message.role = 'user';
     }
     // Prefer modern calls when a client supplies both representations.
