@@ -1,5 +1,38 @@
 import * as util from 'node:util';
 
+const overwrite = (obj, prop, val)=> {
+  Object.defineProperty(obj, prop, {
+    value: val,
+    writable: true,
+    configurable: true,
+    enumerable: true,
+  });
+  return obj;
+};
+
+const assign = (object,key,value) =>{
+  try{
+    object[key] = value;
+  }catch{
+    try{
+      overwrite(object, key, value);
+    }catch{}
+  }
+  return object;
+};
+
+const assignAll = (target,...srcs)=>{
+  for(const src of srcs) {
+    for (const key in src) {
+      assign(target, key, src[key]);
+    }
+    for(const key of Reflect.ownKeys(src)) {
+      assign(target, key, src[key]);
+    }
+  }
+  return target;
+}
+
 const flattenObject = req => {
   req = Object(req);
   const obj = {};
@@ -25,7 +58,7 @@ const flattenRequest = req => {
 };
 
 const flattenArray = arr => {
-  return Object.assign({}, arr, ...arr.map(flattenObject));
+  return assignAll({}, arr, ...arr.map(flattenObject));
 };
 
 const instanceOf = (value, constructor) => {
@@ -418,7 +451,7 @@ async function readJson(message) {
 
 const toObj = obj => {
   if (isString(obj)) {
-    obj = Object.assign(Object(obj), Object(parseTruncatedJSON(obj)));
+    obj = assignAll(Object(obj), Object(parseTruncatedJSON(obj)));
   }
   if (isArray(obj)) {
     return flattenArray(obj);
@@ -429,7 +462,7 @@ const toObj = obj => {
 const toArr = arr => {
   if (!isArray(arr)) {
     if (isString(arr)) {
-      return [Object.assign(Object(arr), parseTruncatedJSON(arr))];
+      return [assignAll(Object(arr), parseTruncatedJSON(arr))];
     }
     if (arr?.[Symbol.iterator]) {
       arr = [...arr].map(Object);
