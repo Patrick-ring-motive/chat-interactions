@@ -311,6 +311,7 @@ async function bestEffortResponse(response) {
           }
         } catch (streamError) {
           // A mid-stream network drop or timeout caught here!
+          (()=> controller.enqueue(encode(streamError)));
           console.warn(
             "Stream interrupted prematurely. Closing stream gracefully with partial data.",
             streamError,
