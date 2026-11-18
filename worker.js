@@ -942,25 +942,46 @@ function translateResponse(interaction, model, tools = []) {
   return result;
 }
 
+// Model capability decisions last for this Worker isolate's lifetime.
+const modelThinking = new Map();
+
+function disableThinking(payload) {
+  // 'none' is valid for summaries, not for thinking_level.
+  delete payload.generation_config.thinking_level;
+  payload.generation_config.thinking_summaries = 'none';
+}
+
 export default {
   async fetch(request) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const payload = translateRequest(request.body ? await readJson(request) : flattenRequest(request));
+      if (modelThinking.get(payload.model) === 'none') disableThinking(payload);
 
-      const upstream = await fetchResponse(interactionsUrl, {
-        method: 'POST',
-        redirect: 'manual',
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          'x-goog-api-key': String(request.headers.get('authorization')).replace(/Bearer\s+/i, '')
-        },
-        body: stringify(payload)
-      });
-      const interaction = await readJson(upstream);
+      let upstream;
+      let interaction;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        upstream = await fetchResponse(interactionsUrl, {
+          method: 'POST',
+          redirect: 'manual',
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'x-goog-api-key': String(request.headers.get('authorization')).replace(/Bearer\s+/i, '')
+          },
+          body: stringify(payload)
+        });
+        interaction = await readJson(upstream);
+        if (attempt === 0 && stringify(interaction?.error?.message ?? '')
+          .includes('Thinking level is not supported for this model.')) {
+          modelThinking.set(payload.model, 'none');
+          disableThinking(payload);
+          continue;
+        }
+        break;
+      }
       return Response.json(translateResponse(interaction, payload.model, payload.tools), {
         headers: {
           'Cache-Control': 'no-store'
