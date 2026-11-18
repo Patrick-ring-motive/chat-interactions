@@ -467,22 +467,23 @@ function contentParts(content) {
     };
   });
 }
-const base64ToBytes = x => {
-  if (instanceOf(x, Uint8Array)) {
-    return x;
-  }
+const tryB64 = str => {
   try {
-    return Uint8Array.fromBase64(x, {
-      alphabet: 'base64url'
-    });
-  } catch {
-    try {
-      return Uint8Array.fromBase64(x);
-    } catch {
-      return new TextEncoder().encode(stringify(x));
-    }
-  }
+    str = str.replace(/=+$/, '').replaceAll('-', '+').replaceAll('_', '/');
+    return Uint8Array.from(atob(str.padEnd(Math.ceil(str.length / 4) * 4, '=')), char => char.charCodeAt(0));
+  } catch { return encode(str); }
 };
+
+const concat = parts => {
+  const outputs = new Uint8Array(parts.reduce((length, part) => length + part.length, 0));
+  let output = 0;
+  for (const part of parts) outputs.set(part, output), output += part.length;
+  return outputs;
+};
+
+const base64ToBytes = x => instanceOf(x, Uint8Array) ? x :
+  concat(stringify(x).split(/([\w+/=-]{4,})/).map((s, i) => i % 2 ? tryB64(s) : encode(s)));
+
 
 function unpackToolId(id) {
   if (!id?.startsWith?.('gi_')) return {
