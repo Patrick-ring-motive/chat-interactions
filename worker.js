@@ -553,19 +553,35 @@ const toThought = thought => {
 };
 
 function unpackToolId(id) {
-  const str = stringify(id).replace(/^gi_/, '');
-  const obj1 = parseTruncatedJSON(str);
-  const bytes = base64ToBytes(str);
-  const obj2 = parseTruncatedJSON(new TextDecoder().decode(bytes).replace(/^gi_/, ''));
-  const parsed = {
-    ...toObj(obj1),
-    ...toObj(obj2)
-  };
-
-  return {
-    id: parsed?.id ?? str,
-    thoughts: toArr(parsed.thoughts ?? parsed).map(toThought)
-  }
+  const str = firstText(id);
+  // Ordinary IDs are opaque, not serialized thought metadata.
+  if (!str?.startsWith('gi_')) return { id: str, thoughts: [] };
+  const parsed = Q(() => parseTruncatedJSON(decode(base64ToBytes(str.slice(3))))) ?? {};
+  const thoughts = toArr(parsed.thoughts ?? []).flatMap((thought) => {
+    const signature = firstText(thought?.signature);
+    const asSummary = (value, supported) => {
+      if (value == null) return [];
+      const extra = isObject(value) && !isArray(value)
+        ? Object.fromEntries(Object.entries(value).filter(([key]) => !supported.includes(key)))
+        : value;
+      return isObject(extra) && !Object.keys(extra).length ? []
+        : [{ type: 'text', text: stringify(extra) }];
+    };
+    const summary = toArr(thought?.summary ?? []).flatMap((part) => {
+      const text = firstText(part?.text);
+      return [
+        ...(text ? [{ type: 'text', text }] : []),
+        ...asSummary(part, ['type', 'text'])
+      ];
+    });
+    summary.push(...asSummary(thought, ['type', 'signature', 'summary']));
+    return signature || summary.length ? [{
+      type: 'thought',
+      ...(signature ? { signature } : {}),
+      ...(summary.length ? { summary } : {})
+    }] : [];
+  });
+  return { id: firstText(parsed.id) ?? str, thoughts };
 }
 
 function packToolId(id, thoughts) {
@@ -994,6 +1010,7 @@ export default {
 
       let upstream;
       let interaction;
+      let rawBody;
       for (let attempt = 0; attempt < 2; attempt++) {
         upstream = await fetchResponse(interactionsUrl, {
           method: 'POST',
@@ -1006,7 +1023,8 @@ export default {
           },
           body: stringify(payload)
         });
-        interaction = await readJson(upstream);
+        rawBody = await $text(upstream);
+        interaction = parseTruncatedJSON(rawBody);
         if (attempt === 0 && stringify(interaction?.error?.message ?? '')
           .includes('Thinking level is not supported for this model.')) {
           modelThinking.set(payload.model, 'none');
@@ -1015,15 +1033,37 @@ export default {
         }
         break;
       }
-      return Response.json(translateResponse(interaction, payload.model, payload.tools), {
+      const hasMessages = toArr(interaction?.steps ?? []).some(step =>
+        step?.type === 'function_call' ||
+        (step?.type === 'model_output' && toArr(step.content ?? []).length));
+      const diagnostic = rawBody || upstream.statusText || stringify(Object.fromEntries(upstream.headers.entries()));
+      const output = hasMessages ? interaction : {
+        ...Object(interaction),
+        steps: [{ type: 'model_output', content: [{ type: 'text', text: diagnostic }] }]
+      };
+      return Response.json(translateResponse(output, payload.model, payload.tools), {
         headers: {
           'Cache-Control': 'no-store'
         },
-        status: stringify(interaction).includes('Rate limit exceeded') ? 429 : upstream.status
+        status: stringify(interaction).includes('Rate limit exceeded') ? 429
+          : [204, 205, 304].includes(upstream.status) ? 200 : upstream.status
       });
     } catch (error) {
-      return new Response(String(error), {
-        status: 500
+      // Build directly: translation itself may be what failed.
+      return new Response(stringify({
+        id: `chatcmpl-${randId()}`,
+        object: 'chat.completion',
+        created: Math.floor(Date.now() / 1000),
+        model: defaultModel,
+        choices: [{
+          index: 0,
+          message: { role: 'assistant', content: stringify(Q(() => error.message) ?? error) },
+          logprobs: null,
+          finish_reason: 'stop'
+        }]
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
       });
     } finally {
       clearTimeout(timer);
