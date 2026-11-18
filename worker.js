@@ -710,9 +710,7 @@ function translateRequest(body) {
       format.type = 'text';
       return request;
     }
-    if (format?.json_schema?.strict) {
-      (format?.json_schema ?? {}).strict = false;
-    }
+    (format?.json_schema ?? {}).strict &&= false;
     request.response_format = {
       type: 'text',
       mime_type: 'application/json',
