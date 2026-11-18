@@ -24,8 +24,8 @@ const flattenRequest = req => {
   };
 };
 
-const flattenArray = arr =>{
-  return Object.assign({},arr,...arr.map(flattenObject));
+const flattenArray = arr => {
+  return Object.assign({}, arr, ...arr.map(flattenObject));
 };
 
 const instanceOf = (value, constructor) => {
@@ -312,7 +312,7 @@ async function bestEffortResponse(response) {
           }
         } catch (streamError) {
           // A mid-stream network drop or timeout caught here!
-          (()=> controller.enqueue(encode(streamError)));
+          (() => controller.enqueue(encode(streamError)));
           console.warn(
             "Stream interrupted prematurely. Closing stream gracefully with partial data.",
             streamError,
@@ -416,11 +416,11 @@ async function readJson(message) {
   return parseTruncatedJSON(text);
 }
 
-const toObj = obj =>{
-  if(isString(obj)){
-    obj = Object.assign(Object(obj),Object(parseTruncatedJSON(obj)));
+const toObj = obj => {
+  if (isString(obj)) {
+    obj = Object.assign(Object(obj), Object(parseTruncatedJSON(obj)));
   }
-  if(isArray(obj)){
+  if (isArray(obj)) {
     return flattenArray(obj);
   }
   return Object(obj);
@@ -489,7 +489,9 @@ const tryB64 = str => {
   try {
     str = str.replace(/=+$/, '').replaceAll('-', '+').replaceAll('_', '/');
     return Uint8Array.from(atob(str.padEnd(Math.ceil(str.length / 4) * 4, '=')), char => char.charCodeAt(0));
-  } catch { return encode(str); }
+  } catch {
+    return encode(str);
+  }
 };
 
 const concat = parts => {
@@ -501,7 +503,6 @@ const concat = parts => {
 
 const base64ToBytes = x => instanceOf(x, Uint8Array) ? x :
   concat(stringify(x).split(/([\w+/=-]{4,})/).map((s, i) => i % 2 ? tryB64(s) : encode(s)));
-
 
 const toThought = thought => {
   thought = toObj(thought);
