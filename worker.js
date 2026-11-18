@@ -843,22 +843,45 @@ function translateResponse(interaction, model, tools = []) {
   const text = [];
   const calls = [];
   let thoughts = [];
+
   interaction = toObj(interaction);
+
   for (let step of toArr(interaction.steps ?? interaction)) {
     step = toObj(step);
+
     if (step.type === 'thought') {
+      const signature = firstText(step.signature);
+      const summary = toArr(step.summary ?? [])
+        .map((part) => firstText(part?.text, part?.content, part?.value))
+        .filter(Boolean)
+        .join('\n');
+
       thoughts.push(step);
+
+      text.push(
+        `\u001eTHOUGHT:${stringify({
+          ...(signature ? {
+            signature
+          } : {}),
+          ...(summary ? {
+            text: summary
+          } : {})
+        })}\u001f`
+      );
+
     } else if (step.type === 'model_output') {
       if (step.error) {
         text.push(stringify(step.error));
         continue;
       }
+
       for (const part of toArr(step?.content ?? step)) {
-          text.push(firstText(part?.text, part?.content, part?.value) ?? stringify(part));
+        text.push(firstText(part?.text, part?.content, part?.value) ?? stringify(part));
       }
+
     } else if (step.type === 'function_call') {
       calls.push({
-        id: packToolId(firstText(step.id, step.call_id) ?? `call_${randId()}`, thoughts),
+        id: firstText(step.id, step.call_id) ?? `call_${randId()}`,
         type: 'function',
         function: {
           name: firstText(step.name, step.function_name, step.function?.name) ??
@@ -867,17 +890,21 @@ function translateResponse(interaction, model, tools = []) {
           arguments: stringify(argumentObject(step.arguments ?? step.args ?? step.function?.arguments ?? step))
         }
       });
+
       thoughts = [];
+
     } else {
       text.push(stringify(step));
     }
   }
-  // Without function calls, treat every upstream status as completed (finish_reason: 'stop').
+
   const message = {
     role: 'assistant',
-    content: text.length ? toArr(text).join(' ') : stringify(interaction)
+    content: text.length ? text.join('') : ''
   };
+
   if (calls.length) message.tool_calls = calls;
+
   const result = {
     id: `chatcmpl-${firstText(interaction.id, interaction.interaction_id) ?? randId()}`,
     object: 'chat.completion',
@@ -890,11 +917,13 @@ function translateResponse(interaction, model, tools = []) {
       finish_reason: calls.length ? 'tool_calls' : 'stop'
     }]
   };
+
   if (interaction.usage) {
     const usage = interaction.usage;
     const prompt = usage.total_input_tokens ?? 0;
     const reasoning = usage.total_thought_tokens ?? 0;
     const completion = (usage.total_output_tokens ?? 0) + reasoning;
+
     result.usage = {
       prompt_tokens: prompt,
       completion_tokens: completion,
@@ -907,6 +936,7 @@ function translateResponse(interaction, model, tools = []) {
       }
     };
   }
+
   return result;
 }
 
