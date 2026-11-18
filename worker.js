@@ -1,6 +1,7 @@
 import * as util from 'node:util';
 
 const flattenObject = req => {
+  req = Object(req);
   const obj = {};
   for (const key in req) {
     if (typeof req[key] !== 'function') {
@@ -417,7 +418,7 @@ async function readJson(message) {
 
 const toObj = obj =>{
   if(isString(obj)){
-    obj = Object.assign(Object(obj),parseTruncatedJSON(obj));
+    obj = Object.assign(Object(obj),Object(parseTruncatedJSON(obj)));
   }
   if(isArray(obj)){
     return flattenArray(obj);
