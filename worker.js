@@ -1,6 +1,6 @@
 import * as util from 'node:util';
 
-const overwrite = (obj, prop, val)=> {
+const overwrite = (obj, prop, val) => {
   Object.defineProperty(obj, prop, {
     value: val,
     writable: true,
@@ -10,23 +10,23 @@ const overwrite = (obj, prop, val)=> {
   return obj;
 };
 
-const assign = (object,key,value) =>{
-  try{
+const assign = (object, key, value) => {
+  try {
     object[key] = value;
-  }catch{
-    try{
+  } catch {
+    try {
       overwrite(object, key, value);
-    }catch{}
+    } catch {}
   }
   return object;
 };
 
-const assignAll = (target,...srcs)=>{
-  for(const src of srcs) {
+const assignAll = (target, ...srcs) => {
+  for (const src of srcs) {
     for (const key in src) {
       assign(target, key, src[key]);
     }
-    for(const key of Reflect.ownKeys(src)) {
+    for (const key of Reflect.ownKeys(src)) {
       assign(target, key, src[key]);
     }
   }
@@ -555,33 +555,49 @@ const toThought = thought => {
 function unpackToolId(id) {
   const str = firstText(id);
   // Ordinary IDs are opaque, not serialized thought metadata.
-  if (!str?.startsWith('gi_')) return { id: str, thoughts: [] };
+  if (!str?.startsWith('gi_')) return {
+    id: str,
+    thoughts: []
+  };
   const parsed = Q(() => parseTruncatedJSON(decode(base64ToBytes(str.slice(3))))) ?? {};
   const thoughts = toArr(parsed.thoughts ?? []).flatMap((thought) => {
     const signature = firstText(thought?.signature);
     const asSummary = (value, supported) => {
       if (value == null) return [];
-      const extra = isObject(value) && !isArray(value)
-        ? Object.fromEntries(Object.entries(value).filter(([key]) => !supported.includes(key)))
-        : value;
-      return isObject(extra) && !Object.keys(extra).length ? []
-        : [{ type: 'text', text: stringify(extra) }];
+      const extra = isObject(value) && !isArray(value) ?
+        Object.fromEntries(Object.entries(value).filter(([key]) => !supported.includes(key))) :
+        value;
+      return isObject(extra) && !Object.keys(extra).length ? [] :
+        [{
+          type: 'text',
+          text: stringify(extra)
+        }];
     };
     const summary = toArr(thought?.summary ?? []).flatMap((part) => {
       const text = firstText(part?.text);
       return [
-        ...(text ? [{ type: 'text', text }] : []),
+        ...(text ? [{
+          type: 'text',
+          text
+        }] : []),
         ...asSummary(part, ['type', 'text'])
       ];
     });
     summary.push(...asSummary(thought, ['type', 'signature', 'summary']));
     return signature || summary.length ? [{
       type: 'thought',
-      ...(signature ? { signature } : {}),
-      ...(summary.length ? { summary } : {})
+      ...(signature ? {
+        signature
+      } : {}),
+      ...(summary.length ? {
+        summary
+      } : {})
     }] : [];
   });
-  return { id: firstText(parsed.id) ?? str, thoughts };
+  return {
+    id: firstText(parsed.id) ?? str,
+    thoughts
+  };
 }
 
 function packToolId(id, thoughts) {
@@ -1039,14 +1055,20 @@ export default {
       const diagnostic = rawBody || upstream.statusText || stringify(Object.fromEntries(upstream.headers.entries()));
       const output = hasMessages ? interaction : {
         ...Object(interaction),
-        steps: [{ type: 'model_output', content: [{ type: 'text', text: diagnostic }] }]
+        steps: [{
+          type: 'model_output',
+          content: [{
+            type: 'text',
+            text: diagnostic
+          }]
+        }]
       };
       return Response.json(translateResponse(output, payload.model, payload.tools), {
         headers: {
           'Cache-Control': 'no-store'
         },
-        status: stringify(interaction).includes('Rate limit exceeded') ? 429
-          : [204, 205, 304].includes(upstream.status) ? 200 : upstream.status
+        status: stringify(interaction).includes('Rate limit exceeded') ? 429 :
+          [204, 205, 304].includes(upstream.status) ? 200 : upstream.status
       });
     } catch (error) {
       // Build directly: translation itself may be what failed.
@@ -1057,13 +1079,19 @@ export default {
         model: defaultModel,
         choices: [{
           index: 0,
-          message: { role: 'assistant', content: stringify(Q(() => error.message) ?? error) },
+          message: {
+            role: 'assistant',
+            content: stringify(Q(() => error.message) ?? error)
+          },
           logprobs: null,
           finish_reason: 'stop'
         }]
       }), {
         status: 500,
-        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store'
+        }
       });
     } finally {
       clearTimeout(timer);
