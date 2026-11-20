@@ -567,11 +567,10 @@ function unpackToolId(id) {
       const extra = isObject(value) && !isArray(value) ?
         Object.fromEntries(Object.entries(value).filter(([key]) => !supported.includes(key))) :
         value;
-      return isObject(extra) && !Object.keys(extra).length ? [] :
-        [{
-          type: 'text',
-          text: stringify(extra)
-        }];
+      return isObject(extra) && !Object.keys(extra).length ? [] : [{
+        type: 'text',
+        text: stringify(extra)
+      }];
     };
     const summary = toArr(thought?.summary ?? []).flatMap((part) => {
       const text = firstText(part?.text);
@@ -1067,8 +1066,7 @@ export default {
         headers: {
           'Cache-Control': 'no-store'
         },
-        status: stringify(interaction).includes('Rate limit exceeded') ? 429 :
-          [204, 205, 304].includes(upstream.status) ? 200 : upstream.status
+        status: stringify(interaction).includes('Rate limit exceeded') ? 429 : [204, 205, 304].includes(upstream.status) ? 200 : upstream.status
       });
     } catch (error) {
       // Build directly: translation itself may be what failed.
